@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/time.h>
 #define DEBUG 1
 #define debugf(s) (DEBUG ? printf("%s:%f\n", #s, s) : printf(""))
 #define debugi(s) (DEBUG ? printf("%s:%d\n", #s, s) : printf(""))
@@ -29,9 +30,9 @@ unsigned long int montecarlo(unsigned long int iterations, unsigned int seed)
 }
 
 unsigned int seedgen(){
-	struct timeval t;
-	gettimeofday(&t, NULL);
-	return (t.tv_sec + t.tv_usec)%(1e10);
+	struct timeval ct;
+	gettimeofday(&ct, NULL);
+	return (ct.tv_sec + ct.tv_usec)%((unsigned long)(1e10));
 }
 
 int main(int argc, char *argv[])
@@ -121,6 +122,12 @@ int main(int argc, char *argv[])
     /* Parent process is the only one remaining now */
 
     /* Reap all the children... */
+
+    for (unsigned int i = 0; i < num_child_processes; i++)
+    {
+        wait(NULL);
+
+    }
 
     debugi(iterations);
     debugi(num_child_processes);
