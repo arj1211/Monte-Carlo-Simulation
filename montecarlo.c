@@ -1,18 +1,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <sys/time.h>
-#define DEBUG 1
-#define debugf(s) (DEBUG ? printf("%s:%f\n", #s, s) : printf(""))
-#define debugi(s) (DEBUG ? printf("%s:%d\n", #s, s) : printf(""))
-#define debugs(s) (DEBUG ? printf("%s:%s\n", #s, s) : printf(""))
-#define ebugf(s) (DEBUG ? fprintf(stderr, "%s:%f\n", #s, s) : printf(""))
-#define ebugi(s) (DEBUG ? fprintf(stderr, "%s:%i\n", #s, s) : printf(""))
-#define ebugs(s) (DEBUG ? fprintf(stderr, "%s:%s\n", #s, s) : printf(""))
+#include <signal.h>
+#include <sys/ipc.h>
+#include <sys/types.h>
+#include <sys/msg.h>
 
 static unsigned long int iterations = 0;
 static unsigned long int count = 0;
 static unsigned int num_child_processes = 1;
+
+struct msg
+{
+    long mtype;
+    unsigned long int data;
+};
 
 unsigned long int montecarlo(unsigned long int iterations, unsigned int seed)
 {
@@ -29,10 +33,11 @@ unsigned long int montecarlo(unsigned long int iterations, unsigned int seed)
     return c;
 }
 
-unsigned int seedgen(){
-	struct timeval ct;
-	gettimeofday(&ct, NULL);
-	return (ct.tv_sec + ct.tv_usec)%((unsigned long)(1e10));
+unsigned int seedgen()
+{
+    struct timeval ct;
+    gettimeofday(&ct, NULL);
+    return (ct.tv_sec + ct.tv_usec) % ((unsigned long)(1e10));
 }
 
 int main(int argc, char *argv[])
@@ -74,9 +79,10 @@ int main(int argc, char *argv[])
 
     /*  Write your code here to create child processes to run the simulation
         and collect the results */
-
     /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~START~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-
+    /* Create msgqueue */
+    int msgqid = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
+    struct msg montemsg;
     /* Create all but one of the child processes (last one deals with 
         the remainder iterations) */
     for (unsigned int i = 0; i < num_child_processes - 1; i++)
@@ -85,7 +91,6 @@ int main(int argc, char *argv[])
         if (pid < 0)
         {
             /* Parent process; fork failed */
-            ebugi(i);
         }
         else if (pid == 0)
         {
@@ -93,14 +98,17 @@ int main(int argc, char *argv[])
             /* Calculate no of iters this child is responsible for */
             unsigned long int child_iters = iterations / (num_child_processes - 1);
             count = montecarlo(child_iters, seedgen());
-            /* Give count back to parent somehow... */
+            /* Set up and send msg to msgqueue */
+            montemsg.mtype = 7;
+            montemsg.data = count;
+            msgsnd(msgqid, &montemsg, sizeof(struct msg), 0);
+            /* End child's life */
             exit(0);
         }
         else
         { /* Parent process, making more children */
         }
     }
-
     /* How many iterations are remaining to be done? (because of int division) */
     unsigned long int rem_iters =
         iterations - (iterations / (num_child_processes - 1)) * (num_child_processes - 1);
@@ -109,33 +117,29 @@ int main(int argc, char *argv[])
     if (pid < 0)
     {
         /* Parent process; fork failed */
-        ebugs("Last child fork failed.");
     }
     else if (pid == 0)
     {
         /* Child process */
         /* Child responsible for rem_iters iterations */
         count = montecarlo(rem_iters, seedgen());
-        /* Give count back to parent somehow... */
+        /* Set up and send msg to msgqueue */
+        montemsg.mtype = 7;
+        montemsg.data = count;
+        msgsnd(msgqid, &montemsg, sizeof(struct msg), 0);
+        /* End child's life */
         exit(0);
     }
     /* Parent process is the only one remaining now */
-
+    while (wait(NULL) > 0);
     /* Reap all the children... */
-
     for (unsigned int i = 0; i < num_child_processes; i++)
     {
-        wait(NULL);
-
+        msgrcv(msgqid, &montemsg, sizeof(struct msg), 7, 0);
+        count += montemsg.data;
     }
-
-    debugi(iterations);
-    debugi(num_child_processes);
-
+    msgctl(msgqid, IPC_RMID, NULL);
     double pi = (double)count / iterations * 4;
     printf("%f\n", pi);
-
-    debugf(pi);
-
     return EXIT_SUCCESS;
 }
