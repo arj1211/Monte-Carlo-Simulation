@@ -103,6 +103,7 @@ int main(int argc, char *argv[])
         {
             /* Parent process; fork failed */
             fprintf(stderr, "Fork failed! Exiting...\n");
+	    exit(pid);
         }
         else if (pid == 0)
         {
@@ -128,6 +129,7 @@ int main(int argc, char *argv[])
         {
             /* Parent process; fork failed */
             fprintf(stderr, "Fork failed! Exiting...\n");
+	    exit(pid);
         }
         else if (pid == 0)
         {
