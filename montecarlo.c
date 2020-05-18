@@ -131,10 +131,11 @@ int main(int argc, char *argv[])
         exit(0);
     }
     /* Parent process is the only one remaining now */
-    while (wait(NULL) > 0);
+    /* while (wait(NULL) > 0); */
     /* Reap all the children... */
     for (unsigned int i = 0; i < num_child_processes; i++)
     {
+        wait(NULL);
         msgrcv(msgqid, &montemsg, sizeof(struct msg), 7, 0);
         count += montemsg.data;
     }
