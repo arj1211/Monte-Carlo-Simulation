@@ -7,6 +7,7 @@
 #include <sys/ipc.h>
 #include <sys/types.h>
 #include <sys/msg.h>
+#include <getopt.h>
 
 static unsigned long int iterations = 0;
 static unsigned long int count = 0;
@@ -80,29 +81,33 @@ int main(int argc, char *argv[])
     /*  Write your code here to create child processes to run the simulation
         and collect the results */
     /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~START~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+    
     /* Create msgqueue */
     int msgqid = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
     struct msg montemsg;
+    
     /* Create all but one of the child processes (last one deals with 
         the remainder iterations) */
 
-    /* How many iterations are remaining to be done after evenly distributing? (because of int division) */
-    unsigned long int rem_iters =
-        iterations - (iterations / (num_child_processes - 1)) * (num_child_processes - 1);
+    /* Two steps. 1: evenly divide iterations into children, 2: remainder iterations into another child */
 
-    for (unsigned int i = 0; i < num_child_processes - (rem_iters ? 1 : 0); i++)
+    unsigned long int even_iterations = iterations/num_child_processes;
+    unsigned long int remaining_iterations = iterations%num_child_processes;
+    
+    unsigned long int children = num_child_processes - (remaining_iterations?1:0);
+    
+    for (unsigned int i = 0; i < children; i++)
     {
         pid_t pid = fork();
         if (pid < 0)
         {
             /* Parent process; fork failed */
+            /* fprintf(stderr, "Fork failed on iter %u", i); */
         }
         else if (pid == 0)
         {
             /* Child process */
-            /* Calculate no of iters this child is responsible for */
-            unsigned long int child_iters = iterations / (num_child_processes - 1);
-            count = montecarlo(child_iters, seedgen());
+            count = montecarlo(even_iterations, seedgen());
             /* Set up and send msg to msgqueue */
             montemsg.mtype = 7;
             montemsg.data = count;
@@ -114,19 +119,20 @@ int main(int argc, char *argv[])
         { /* Parent process, making more children */
         }
     }
-    /* Dispatch one child to take care of remaining iterations */
-    pid_t pid = fork();
-    if (rem_iters)
+    
+    /* Dispatch one child to take care of remaining iterations if any remain*/
+    if (remaining_iterations)
     {
+        pid_t pid = fork();
         if (pid < 0)
         {
             /* Parent process; fork failed */
+            /* fprintf(stderr, "Fork failed on remnant child for %ld iters left", remaining_iterations); */
         }
         else if (pid == 0)
         {
             /* Child process */
-            /* Child responsible for rem_iters iterations */
-            count = montecarlo(rem_iters, seedgen());
+            count = montecarlo(even_iterations+remaining_iterations, seedgen());
             /* Set up and send msg to msgqueue */
             montemsg.mtype = 7;
             montemsg.data = count;
@@ -135,9 +141,9 @@ int main(int argc, char *argv[])
             exit(0);
         }
     }
-    /* Parent process is the only one remaining now */
+    
+    /* Parent process is the only one remaining now, reap all the children... */
     /* while (wait(NULL) > 0); */
-    /* Reap all the children... */
     for (unsigned int i = 0; i < num_child_processes; i++)
     {
         wait(NULL);
