@@ -85,7 +85,12 @@ int main(int argc, char *argv[])
     struct msg montemsg;
     /* Create all but one of the child processes (last one deals with 
         the remainder iterations) */
-    for (unsigned int i = 0; i < num_child_processes - 1; i++)
+
+    /* How many iterations are remaining to be done after evenly distributing? (because of int division) */
+    unsigned long int rem_iters =
+        iterations - (iterations / (num_child_processes - 1)) * (num_child_processes - 1);
+
+    for (unsigned int i = 0; i < num_child_processes - (rem_iters ? 1 : 0); i++)
     {
         pid_t pid = fork();
         if (pid < 0)
@@ -109,26 +114,26 @@ int main(int argc, char *argv[])
         { /* Parent process, making more children */
         }
     }
-    /* How many iterations are remaining to be done? (because of int division) */
-    unsigned long int rem_iters =
-        iterations - (iterations / (num_child_processes - 1)) * (num_child_processes - 1);
     /* Dispatch one child to take care of remaining iterations */
     pid_t pid = fork();
-    if (pid < 0)
+    if (rem_iters)
     {
-        /* Parent process; fork failed */
-    }
-    else if (pid == 0)
-    {
-        /* Child process */
-        /* Child responsible for rem_iters iterations */
-        count = montecarlo(rem_iters, seedgen());
-        /* Set up and send msg to msgqueue */
-        montemsg.mtype = 7;
-        montemsg.data = count;
-        msgsnd(msgqid, &montemsg, sizeof(struct msg), 0);
-        /* End child's life */
-        exit(0);
+        if (pid < 0)
+        {
+            /* Parent process; fork failed */
+        }
+        else if (pid == 0)
+        {
+            /* Child process */
+            /* Child responsible for rem_iters iterations */
+            count = montecarlo(rem_iters, seedgen());
+            /* Set up and send msg to msgqueue */
+            montemsg.mtype = 7;
+            montemsg.data = count;
+            msgsnd(msgqid, &montemsg, sizeof(struct msg), 0);
+            /* End child's life */
+            exit(0);
+        }
     }
     /* Parent process is the only one remaining now */
     /* while (wait(NULL) > 0); */
