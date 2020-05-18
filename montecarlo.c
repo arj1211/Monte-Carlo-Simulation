@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
         if (pid < 0)
         {
             /* Parent process; fork failed */
-            /* fprintf(stderr, "Fork failed on iter %u", i); */
+            fprintf(stderr, "Fork failed! Exiting...\n");
         }
         else if (pid == 0)
         {
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
         if (pid < 0)
         {
             /* Parent process; fork failed */
-            /* fprintf(stderr, "Fork failed on remnant child for %ld iters left", remaining_iterations); */
+            fprintf(stderr, "Fork failed! Exiting...\n");
         }
         else if (pid == 0)
         {
